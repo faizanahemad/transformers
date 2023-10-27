@@ -1702,6 +1702,7 @@ class UnbatchedClassifierFreeGuidanceLogitsProcessor(LogitsProcessor):
             "past_key_values": None,
             "first_pass": True,
         }
+        self.jsd_store = []
 
     def get_unconditional_logits(self, input_ids):
         if self.unconditional_context["first_pass"]:
@@ -1748,6 +1749,24 @@ class UnbatchedClassifierFreeGuidanceLogitsProcessor(LogitsProcessor):
 
         unconditional_logits = torch.nn.functional.log_softmax(logits[:, -1], dim=-1)
         out = self.guidance_scale * (scores - unconditional_logits) + unconditional_logits
+        # We want to check if the max logit is different
+        # We want to check if the distribution is different
+        # use torch argmax to find the index of the max logit and its value in both scores and unconditional_logits
+        # index, value = torch.argmax(scores), torch.max(scores)
+        # use torch topk to get both the index and value of the top 1 logits
+        value_actual, index_actual = torch.topk(scores, 1)
+        value_unconditional, index_unconditional = torch.topk(unconditional_logits, 1)
+        # print("Actual: ", value_actual, index_actual)
+        # print("Unconditional: ", value_unconditional, index_unconditional)
+        scores_exp = torch.exp(scores)
+        unconditional_logits_exp = torch.exp(unconditional_logits)
+        # Find KL-Divergence of above 2
+        import torch.nn.functional as F
+        kl_div_1 = torch.sum(scores_exp * (scores - unconditional_logits), dim=-1)
+        kl_div_2 = torch.sum(unconditional_logits_exp * (unconditional_logits - scores), dim=-1)
+        jsd = (kl_div_1 + kl_div_2) / 2
+        # print("JSD: ", jsd)
+        self.jsd_store.append(jsd[0].item())
         return out
 
 

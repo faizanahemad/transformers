@@ -16,6 +16,7 @@
 
 import copy
 import inspect
+import random
 import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
@@ -2569,6 +2570,15 @@ class GenerationMixin:
 
             if this_peer_finished and not synced_gpus:
                 break
+
+        jsd_store = logits_processor[0].jsd_store
+        # plot as line plot in matplotlib
+        from matplotlib import pyplot as plt
+        plt.plot(jsd_store)
+        # save the figure as well.
+        import random
+        plt.savefig(f"jsd_plot_{random.randint()}.png")
+        # print jsd line by line
 
         if streamer is not None:
             streamer.end()
