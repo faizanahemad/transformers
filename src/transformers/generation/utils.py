@@ -2571,14 +2571,34 @@ class GenerationMixin:
             if this_peer_finished and not synced_gpus:
                 break
 
-        jsd_store = logits_processor[0].jsd_store
-        # plot as line plot in matplotlib
-        from matplotlib import pyplot as plt
-        plt.plot(jsd_store)
-        # save the figure as well.
-        import random
-        plt.savefig(f"jsd_plot_{random.randint()}.png")
-        # print jsd line by line
+        if len(logits_processor) > 0 and isinstance(logits_processor[0], UnbatchedClassifierFreeGuidanceLogitsProcessor):
+            import datetime
+            import pytz
+
+            # set the timezone you want to convert to
+            tz = pytz.timezone('Asia/Kolkata')
+
+            # get the current time in the specified timezone
+            now = datetime.datetime.now(tz)
+
+            # format the datetime string
+            date_string = now.strftime('%Y-%m-%d %H:%M:%S %Z%z')
+            jsd_store = logits_processor[0].jsd_store
+            modified_jsd_store = logits_processor[0].modified_jsd_store
+            # plot as line plot in matplotlib
+            from matplotlib import pyplot as plt
+            plt.plot(jsd_store)
+            plt.plot(modified_jsd_store)
+            # add legend
+            plt.legend(["JSD", "Modified JSD"])
+            import numpy as np
+            jsd_ratio = np.mean(jsd_store[0:10]) / np.mean(jsd_store[-10:])
+            modified_jsd_ratio = np.mean(modified_jsd_store[0:10]) / np.mean(modified_jsd_store[-10:])
+            print(f"\nJSD Ratio = {jsd_ratio:.4f}, Modified JSD Ratio = {modified_jsd_ratio:.4f}\n")
+            # save the figure as well.
+            import random
+            plt.savefig(f"jsd_plot_{date_string}.png")
+            # print jsd line by line
 
         if streamer is not None:
             streamer.end()
