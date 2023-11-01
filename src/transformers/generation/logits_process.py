@@ -1691,6 +1691,7 @@ class UnbatchedClassifierFreeGuidanceLogitsProcessor(LogitsProcessor):
         model,
         unconditional_ids: Optional[torch.LongTensor] = None,
         unconditional_attention_mask: Optional[torch.LongTensor] = None,
+        remind_negative_prompt_ids: Optional[torch.LongTensor] = None,
         use_cache: Optional[bool] = True,
     ):
         self.guidance_scale = guidance_scale
@@ -1698,12 +1699,14 @@ class UnbatchedClassifierFreeGuidanceLogitsProcessor(LogitsProcessor):
         self.unconditional_context = {
             "input_ids": unconditional_ids,
             "attention_mask": unconditional_attention_mask,
+            "remind_negative_prompt_ids": remind_negative_prompt_ids,
             "use_cache": use_cache,
             "past_key_values": None,
             "first_pass": True,
         }
         self.jsd_store = []
         self.modified_jsd_store = []
+        self.newline_token = int(remind_negative_prompt_ids[:, -1])
 
     def get_unconditional_logits(self, input_ids):
         if self.unconditional_context["first_pass"]:
@@ -1717,17 +1720,23 @@ class UnbatchedClassifierFreeGuidanceLogitsProcessor(LogitsProcessor):
             attention_mask = self.unconditional_context["attention_mask"]
             self.unconditional_context["first_pass"] = False
         else:
+            last_token = input_ids[:, -1]
+            if len(self.jsd_store)//50 > 1 and self.unconditional_context["remind_negative_prompt_ids"] is not None and self.newline_token == int(last_token):
+                actual_input_ids_to_use = torch.cat([self.unconditional_context["remind_negative_prompt_ids"], input_ids[:, -1:]], dim=1)
+            else:
+                actual_input_ids_to_use = input_ids[:, -1:]
             attention_mask = torch.cat(
                 [
                     self.unconditional_context["attention_mask"],
-                    torch.ones_like(input_ids[:, -1:], dtype=torch.long),
+                    torch.ones_like(actual_input_ids_to_use, dtype=torch.long),
                 ],
                 dim=1,
             )
+
             if not self.unconditional_context["use_cache"]:
-                input_ids = torch.cat([self.unconditional_context["input_ids"], input_ids[:, -1:]], dim=1)
+                input_ids = torch.cat([self.unconditional_context["input_ids"], actual_input_ids_to_use], dim=1)
             else:
-                input_ids = input_ids[:, -1:]
+                input_ids = actual_input_ids_to_use
             self.unconditional_context["input_ids"] = input_ids
             self.unconditional_context["attention_mask"] = attention_mask
 
@@ -1761,8 +1770,8 @@ class UnbatchedClassifierFreeGuidanceLogitsProcessor(LogitsProcessor):
         initial_jsd = np.mean(self.jsd_store[:20]) if cur_idx > 20 else jsd[0].item()
         # # ((1.02 ** cur_idx) if cur_idx > 100 else (1.01 ** cur_idx)) * 
         # actual_guidance_scale = (1.01 ** cur_idx) * self.guidance_scale 
-        actual_guidance_scale = ((initial_jsd / np.mean(self.jsd_store[-20:])) * self.guidance_scale) if cur_idx > 40 else self.guidance_scale
-        # actual_guidance_scale = self.guidance_scale
+        # actual_guidance_scale = ((initial_jsd / np.mean(self.jsd_store[-20:])) * self.guidance_scale) if cur_idx > 40 else self.guidance_scale
+        actual_guidance_scale = self.guidance_scale
         out = actual_guidance_scale * (scores - unconditional_logits) + unconditional_logits
         self.modified_jsd_store.append(float(jsd[0].item()) * actual_guidance_scale / self.guidance_scale)
         # We want to check if the max logit is different

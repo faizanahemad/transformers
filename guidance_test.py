@@ -15,11 +15,12 @@ inputs = inputs.to(device)
 # print(out)
 # print("\n------------------\n")
 # with a negative prompt
-neg_prompt = "Write a continuation to a very happy story (that also ends happily and with positive outcome) that starts as below.\n\nStory:\nToday, a dragon flew over Paris, France,"
+neg_prompt = "Whenever I say 'Adhere to original instructions.' please remember the initial instructions for your task and follow these original instructions while completing the task. We are providing the original instructions below.\n\nWrite a continuation to a very happy story (that also ends happily and with positive outcome) that starts as below.\n\nStory:\nToday, a dragon flew over Paris, France,"
 neg_inputs = tokenizer([neg_prompt], return_tensors="pt")
-neg_inupts_inject = tokenizer(["\nAdhere to the original instructions given below:\n'''{neg_prompt}'''\n"], return_tensors="pt", add_special_tokens=False)
+neg_inupts_inject = tokenizer([f"\nAdhere to the original instructions and continue with your reply. Original instructions are given below:\n'''{neg_prompt}'''\n"], return_tensors="pt", add_special_tokens=False)
+neg_inupts_inject = tokenizer(["\nAdhere to original instructions.\n"], return_tensors="pt", add_special_tokens=False)
 neg_inputs = neg_inputs.to(device)
-out = model.generate(inputs["input_ids"], guidance_scale=2.0, negative_prompt_ids=neg_inputs["input_ids"], remind_negative_prompt_ids=neg_inupts_inject["inputs"], max_length=400)
+out = model.generate(inputs["input_ids"], guidance_scale=2.0, negative_prompt_ids=neg_inputs["input_ids"], remind_negative_prompt_ids=neg_inupts_inject["input_ids"], max_length=400)
 out = tokenizer.batch_decode(out, skip_special_tokens=True)[0]
 
 print(out)
